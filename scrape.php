@@ -8,6 +8,8 @@ $locations = ["/nl/opvanglocaties/alkmaar", "/nl/opvanglocaties/almelo", "/nl/op
 
 ini_set('user_agent','Mozilla/4.0 (compatible; MSIE 6.0)');
 
+$result = [];
+
 foreach ($locations as $location) {
 	$hash = md5($location);
 	$filename = 'cache/' . $hash . '.html';
@@ -15,7 +17,9 @@ foreach ($locations as $location) {
 
 	if (!file_exists($filename)) {
 		$location_html = file_get_contents('https://www.coa.nl' . $location);
-		file_put_contents($filename, $location_html);
+		if ($location_html) {
+			file_put_contents($filename, $location_html);
+		}
 	}
 
 	if (!$location_html) {
@@ -41,19 +45,47 @@ foreach ($locations as $location) {
 	$locality_block = $xpath->query('//div[contains(@class,"locality-block")]')->item(0);
 
 	if ($street_block && $locality_block) {
-		$address = $street_block->nodeValue . " " . $locality_block->nodeValue;
+		$address = $street_block->nodeValue . " " . $locality_block->nodeValue . ' NL';
 		$google_geocoder_url = 'http://maps.google.com/maps/api/geocode/json?sensor=false&address=';
 
 		$geom_filename = 'cache/' . $hash . '.geom';
 
-		if (!file_exists($geom_filename)) {
+		$geocoded = '';
 
+		if (!file_exists($geom_filename)) {
+			$geocoded = file_get_contents($google_geocoder_url . urlencode($address));
+
+			if ($geocoded) {
+				file_put_contents($geom_filename, $geocoded);
+			}
 		}
 
-		$geocoded = file_get_contents($google_geocoder_url . $address);
+		if (!$geocoded) {
+			$geocoded = file_get_contents($geom_filename);
+		}
 
+		$geo_json = json_decode($geocoded, TRUE);
 
+		$formatted_address = $geo_json['results'][0]['formatted_address'];
+
+		$lat = $geo_json['results'][0]['geometry']['location']['lat'];
+		$lng = $geo_json['results'][0]['geometry']['location']['lng'];
+
+		$address_components_massaged = [];
+
+		foreach ($geo_json['results'][0]['address_components'] as $address_component) {
+			foreach ($address_component['types'] as $type) {
+				$address_components_massaged[$type] = $address_component;
+			}
+		}
+
+		$city = $address_components_massaged['locality']['long_name'];
 	}
 
-
+	$result[$city] = array(
+		'address' => $formatted_address,
+			'lat' => $lat,
+			'lng' => $lng,
+			'capacity' => $count
+	);
 }
