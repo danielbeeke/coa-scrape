@@ -82,10 +82,25 @@ foreach ($locations as $location) {
 		$city = $address_components_massaged['locality']['long_name'];
 	}
 
-	$result[$city] = array(
-		'address' => $formatted_address,
+	$result[] = array(
+		'type' => 'Feature',
+		'geometry' => [
+			'type' => 'Point',
+			'coordinates' => [$lng, $lat]
+		],
+		'properties' => [
+			'city' => $city,
+			'address' => $formatted_address,
 			'lat' => $lat,
 			'lng' => $lng,
 			'capacity' => $count
+		]
 	);
 }
+
+$geo_json = array(
+	"type" => "FeatureCollection",
+	"features" => $result,
+);
+
+file_put_contents('data.json', json_encode($geo_json));
